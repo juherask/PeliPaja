@@ -611,7 +611,8 @@ public class WorkshopClient : Game
             // The --password option for svn.exe does not work, therefore send it using stdin
             if (currentTask == Task.CommitListed)
             {
-                activeCliProcess.StandardInput.WriteLine( SVN_PASSWD );
+                if (SVN_PASSWD!=null)
+                    activeCliProcess.StandardInput.WriteLine( SVN_PASSWD );
                 activeCliProcess.WaitForExit(runTimeout);
             }
         }
