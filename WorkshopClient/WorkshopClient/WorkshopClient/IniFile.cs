@@ -36,11 +36,12 @@ public class IniFile
 
                 while (strLine != null)
                 {
-                    strLine = strLine.Trim().ToUpper();
+                    //strLine = strLine.Trim().ToUpper();
 
                     // Comment line
                     if (strLine.StartsWith(";"))
                     {
+                        strLine = iniFile.ReadLine();
                         continue;
                     }
 
@@ -48,7 +49,7 @@ public class IniFile
                     {
                         if (strLine.StartsWith("[") && strLine.EndsWith("]"))
                         {
-                            currentRoot = strLine.Substring(1, strLine.Length - 2);
+                            currentRoot = strLine.Substring(1, strLine.Length - 2).ToUpper();
                         }
                         else
                         {
@@ -61,7 +62,7 @@ public class IniFile
                                 currentRoot = "ROOT";
 
                             sectionPair.Section = currentRoot;
-                            sectionPair.Key = keyPair[0];
+                            sectionPair.Key = keyPair[0].ToUpper();
 
                             if (keyPair.Length > 1)
                                 value = keyPair[1];

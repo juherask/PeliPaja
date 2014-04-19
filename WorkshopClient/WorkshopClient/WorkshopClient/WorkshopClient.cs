@@ -9,7 +9,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Threading;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
+//using System.Windows.Forms;
 
 // Oppilas, PelinNimi, Repo, Lista checkoutattavista tiedostoista/kansioista, Solutiontiedosto
 class GameRecord : ICloneable
@@ -21,16 +21,18 @@ class GameRecord : ICloneable
     public string PupilGroupName;
     public string GameName;
     public string SVNRepo;
-    public List<string> ToFetch;
+    public List<string> toProcess;
     public string Solution;
     public string ContentFolder;
+    public string TemplateFolder;
 }
 
 class ContentTool
 {
-    public string ToolLabel;
     public string ToolExe;
     public string TemplateFile;
+    public string ContentExt;
+    public string ContentDescription;
 }
 
 class User32
@@ -54,8 +56,9 @@ public class WorkshopClient : Game
     // TODO: replace these with the ones loaded from an ini file
     string SVN_CLI_EXE = @"C:\Users\opetus01\Downloads\svn-win32-1.8.8\svn-win32-1.8.8\bin\svn.exe";
     string MSBUILD_EXE = @"C:\Windows\Microsoft.NET\Framework\v4.0.30319\MsBuild.exe";
-    string SVN_OPTIONS = @"--username 'jypeliworkshop' --password 'qwerty12345'";
-    
+    string SVN_OPTIONS = @"--username 'jypeliworkshop'";
+    string SVN_PASSWD = "qwerty12345";
+
     string CONTENT_EXT = ".png";
     string CONTENT_SUBFOLDER = "Content";
 
@@ -63,16 +66,22 @@ public class WorkshopClient : Game
     GameRecord workshopGame;
     ContentTool tool;
     Process activeCliProcess;
+    string fileToEdit;
 
     bool processing = false;
     bool paused = false;
-    bool topmost = true;
+    bool topmost = false;
+    bool wasTopmost = false;
 
     // Multithreading support
     Mutex stateQueueMutex = new Mutex();
     Queue<string> messageQueue = new Queue<string>();
     Queue<Tuple<GameRecord, Task, Status>> stateQueue = new Queue<Tuple<GameRecord, Task, Status>>();
     Thread processingThread;
+
+    // Quickhack to keep track of changed files.
+    List<string> newAndModifiedFileNames = new List<string>();
+    List<char> newAndModifiedFileStates = new List<char>();
 
     enum Task
     {
@@ -81,6 +90,8 @@ public class WorkshopClient : Game
         Compile,
         RunGame,
         RunTool,
+        CheckForModified,
+        ChooseFromModified,
         AddListed,
         CommitListed,
         None
@@ -104,8 +115,9 @@ public class WorkshopClient : Game
 
     public override void Begin()
     {
-        SetWindowSize(800, 600);
-        //SetWindowTopmost(topmost);
+        //SetWindowSize(800, 600);
+        SetWindowTopmost(topmost);
+        Level.Background.Color = Color.White;
 
         IsMouseVisible = true;
 
@@ -113,21 +125,21 @@ public class WorkshopClient : Game
         Keyboard.Listen(Key.Escape, Jypeli.ButtonState.Pressed, ConfirmExit, "Lopeta peli");
         Keyboard.Listen(Key.P, Jypeli.ButtonState.Pressed, PauseProcess, "Pistä tauolle");
         Keyboard.Listen(Key.T, Jypeli.ButtonState.Pressed, ToggleTopmost, "Tuo päällimmäiseksi");
-        
+        Exiting += StopThread;
+
         ReadGameInfoAndSettings();
 
         taskQueue = new Queue<Tuple<GameRecord, Task>>();
-
 
         GameObject logo = new GameObject(LoadImage("logo"));
         logo.Y = Screen.Height / 6*2;
         Add(logo);
 
         // Create buttons
-        PushButton playGameButton = new PushButton(400, 50, "Pelaa viimeisintä peliä");
+        PushButton playGameButton = new PushButton(400, 50, "Pelaa uusinta versiota pelistä");
         // TODO: Nämä voisi lukea ini tiedostosta ja niitä voisi olla monta? Esim. "piirrä uusi kartta" "piirrä uusi pelihahmo" jne.
-        PushButton createContentButton = new PushButton(400, 50, "Tee uutta sisältöä");
-        PushButton addContentButton = new PushButton(400, 50, "Lisää sisältö peliin");
+        PushButton createContentButton = new PushButton(400, 50, "Tee uusi "+tool.ContentDescription+" peliin");
+        PushButton addContentButton = new PushButton(400, 50, "Lisää tekemäsi sisältö peliin");
 
         playGameButton.Clicked += PlayGamePressed;
         createContentButton.Clicked += CreateContentPressed;
@@ -140,7 +152,12 @@ public class WorkshopClient : Game
         addContentButton.Y = -Screen.Height / 6;
         Add(addContentButton);
 
+        taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.Checkout));
         StartThreadedTaskListProcessor();
+    }
+    void StopThread()
+    {
+         processingThread.Abort();
     }
     void PlayGamePressed()
     {
@@ -150,55 +167,55 @@ public class WorkshopClient : Game
     }
     void CreateContentPressed()
     {
-        string contentBaseFolder = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.ContentFolder);
-        if (tool.TemplateFile != "")
-        {
-            File.Copy(Path.Combine(Directory.GetCurrentDirectory(), tool.TemplateFile), Path.Combine(contentBaseFolder, givenName + ".png"));
-        }
-        taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.RunTool));
+        InputWindow askFileNameWindow = new InputWindow("Anna luotavalle "+tool.ContentDescription+"tiedostolle nimi");
+        askFileNameWindow.TextEntered += ContentNameGiven;
+        Add(askFileNameWindow);
     }
-    void ContentNameGiven()
+    void ContentNameGiven(InputWindow inputWindow)
     {
-        InputWindow kysymysIkkuna = new InputWindow("Vastaa kysymykseen");
-        kysymysIkkuna.TextEntered += ProcessInput;
-#replace ä->a ö->o
-        Add(kysymysIkkuna);
-    }
+        string contentBaseFolder = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.ContentFolder);
+        string templateBaseFolder = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.TemplateFolder);
 
+        string templateFilePath = Path.Combine(templateBaseFolder, tool.TemplateFile);
+        string contentFileName = Path.GetFileNameWithoutExtension( inputWindow.InputBox.Text )+tool.ContentExt;
+        string contentFilePath = Path.Combine(contentBaseFolder, CONTENT_SUBFOLDER, contentFileName);
+
+        if (File.Exists(contentFilePath))
+        {
+            MessageDisplay.Add( "Tämä nimi on jo varattu. Paina nappia uudelleen ja keksi toinen nimi." );
+        }
+        else
+        {
+            if (tool.TemplateFile != "")
+            {
+                File.Copy(templateFilePath, contentFilePath);
+                fileToEdit = contentFilePath;
+            }
+            else
+            {
+                fileToEdit = "";
+            }
+            taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.RunTool));
+        }
+    }
     void AddContentPressed()
     {
-        GameRecord addCommitFilesRecord = workshopGame.Clone() as GameRecord;
-        addCommitFilesRecord.ToFetch = new List<string>();
-
-     
-        OpenFileDialog addFileDialog = new OpenFileDialog();
-        addFileDialog.DefaultExt = CONTENT_EXT;
-        addFileDialog.CheckFileExists = true;
-        addFileDialog.InitialDirectory = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.ContentFolder);
-        if (addFileDialog.ShowDialog()==DialogResult.OK)
-        {
-            addCommitFilesRecord.ToFetch.Add(addFileDialog.FileName);
-            taskQueue.Enqueue(new Tuple<GameRecord, Task>(addCommitFilesRecord, Task.AddListed));
-            taskQueue.Enqueue(new Tuple<GameRecord, Task>(addCommitFilesRecord, Task.CommitListed));
-        }
+        taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.CheckForModified));
     }
-
     private void ReadGameInfoAndSettings()
     {
         IniFile settingsFile = new IniFile("settings.ini");
         SVN_CLI_EXE = settingsFile.GetSetting("settings", "svn_cli_exe");
-        MSBUILD_EXE = settingsFile.GetSetting("settings", "msbuild_exe");
         SVN_OPTIONS = settingsFile.GetSetting("settings", "svn_options");
-        CONTENT_EXT = settingsFile.GetSetting("settings", "content_ext");
-
-        // TODO: TO GAME
+        SVN_PASSWD = settingsFile.GetSetting("settings", "svn_passwd");
+        MSBUILD_EXE = settingsFile.GetSetting("settings", "msbuild_exe");
         CONTENT_SUBFOLDER = settingsFile.GetSetting("tools", "content_subfolder");
-        TODO: also template file to game
 
 		tool = new ContentTool(){
-            ToolLabel=settingsFile.GetSetting("tools", "add_content_label" ),
             ToolExe=settingsFile.GetSetting("tools", "add_content_exe" ),
             TemplateFile=settingsFile.GetSetting("tools", "content_template_file" ),
+            ContentDescription = settingsFile.GetSetting("tools", "content_description"),
+            ContentExt = settingsFile.GetSetting("tools", "content_ext")
         };
 
         // Game
@@ -206,9 +223,10 @@ public class WorkshopClient : Game
             PupilGroupName=settingsFile.GetSetting("gameinfo","pupil_group_name"),
             GameName=settingsFile.GetSetting("gameinfo","game_name"),
             SVNRepo=settingsFile.GetSetting("gameinfo","repository_url"),
-            ToFetch=new List<string>(){"."}, // Root folder
+            toProcess=new List<string>(){"."}, // Root folder
             Solution=settingsFile.GetSetting("gameinfo","solution_file"),
-            ContentFolder=settingsFile.GetSetting("gameinfo","content_folder")
+            ContentFolder=settingsFile.GetSetting("gameinfo","content_folder"),
+            TemplateFolder=settingsFile.GetSetting("gameinfo","template_folder")
         };
     }
 
@@ -228,7 +246,7 @@ public class WorkshopClient : Game
     void SetWindowTopmost(bool topmost)
     {
         int screenHt = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
-        int screenWt = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
+        int screenWt = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
         if (topmost)
         {
             User32.SetWindowPos((uint)this.Window.Handle, HWND_TOPMOST, 0, 0, screenWt, screenHt, 0);
@@ -261,19 +279,17 @@ public class WorkshopClient : Game
                 var stateChange = stateQueue.Dequeue();
                 var gameName = stateChange.Item1.GameName;
 
-                // TODO: Do we want to react?
-                switch (stateChange.Item3)
+                if (stateChange.Item2==Task.RunGame || stateChange.Item2==Task.RunTool)
                 {
-                    case Status.Wait:
-                        //indicator.Color = Color.Gray;
-                        break;
-                    case Status.OK:
-                        //indicator.Color = Color.Green;
-                    case Status.Fail:
-                        //indicator.Color = Color.Red;
-                        break;
-                    default:
-                        break;
+                    if (topmost && stateChange.Item3==Status.Wait)
+                    {
+                        SetWindowTopmost(false);
+                        wasTopmost = true;
+                    }
+                    else if (wasTopmost == true && (stateChange.Item3 == Status.OK || stateChange.Item3 == Status.Fail))
+                    {
+                        SetWindowTopmost(true);
+                    }
                 }
             }
             stateQueueMutex.ReleaseMutex();
@@ -298,14 +314,11 @@ public class WorkshopClient : Game
     {
         while (true)
         {
-            if (!processing)
-                System.Threading.Thread.Sleep((int)(PROCESS_CHECK_INTERVAL * 1000));
-
-            while (paused)
-                System.Threading.Thread.Sleep((int)(PROCESS_CHECK_INTERVAL * 1000));
-
-            if (taskQueue.Count == 0)
-                break;
+            if (processing || paused || taskQueue.Count == 0)
+            {
+                System.Threading.Thread.Sleep((int)(PROCESS_CHECK_INTERVAL));
+                continue;
+            }
 
             var task = taskQueue.Dequeue();
             switch (task.Item2)
@@ -336,18 +349,31 @@ public class WorkshopClient : Game
                     break;
                 case Task.RunTool:
                     stateQueueMutex.WaitOne();
-                    messageQueue.Enqueue("Käynnistetään ohjelma " + task.Item1.GameName);
+                    messageQueue.Enqueue("Käynnistetään työkalu " + task.Item1.GameName);
                     stateQueueMutex.ReleaseMutex();
                     ProcessRunTool(task.Item1);
+                    break;
+                case Task.CheckForModified:
+                    stateQueueMutex.WaitOne();
+                    messageQueue.Enqueue("Tarkista muuttuneet peliin " + task.Item1.GameName);
+                    stateQueueMutex.ReleaseMutex();
+                    ProcessCheckModified(task.Item1);
+                    break;
+                case Task.ChooseFromModified:
+                    stateQueueMutex.WaitOne();
+                    messageQueue.Enqueue("Valitse muuttuneet peliin " + task.Item1.GameName);
+                    stateQueueMutex.ReleaseMutex();
+                    ProcessChooseModified(task.Item1);
+                    break;
                 case Task.AddListed:
                     stateQueueMutex.WaitOne();
-                    messageQueue.Enqueue("Lisätään sisältö " + task.Item1.GameName);
+                    messageQueue.Enqueue("Lisätään sisältö peliin " + task.Item1.GameName);
                     stateQueueMutex.ReleaseMutex();
                     ProcessAddListed(task.Item1);
                     break;
                 case Task.CommitListed:
                     stateQueueMutex.WaitOne();
-                    messageQueue.Enqueue("Lisätään sisältö " + task.Item1.GameName);
+                    messageQueue.Enqueue("Lähetetään sisältö peliin " + task.Item1.GameName);
                     stateQueueMutex.ReleaseMutex();
                     ProcessCommitListed(task.Item1);
                     break;
@@ -369,8 +395,8 @@ public class WorkshopClient : Game
         {
             Directory.CreateDirectory(record.PupilGroupName);
             Task currentTask = Task.Checkout;
-            Task nextTask = Task.None;
-            string command = String.Format("\"{0}\" co {1} \"{2}\" --depth empty", SVN_CLI_EXE, record.SVNRepo, Path.Combine(Directory.GetCurrentDirectory(), record.PupilGroupName));
+            Task nextTask = Task.UpdateListed;
+            string command = String.Format("\"{0}\" {1} co {2} \"{3}\"", SVN_CLI_EXE, SVN_OPTIONS, record.SVNRepo, Path.Combine(Directory.GetCurrentDirectory(), record.PupilGroupName));
 
             GenericProcessor(record, currentTask, nextTask, command);
         }
@@ -386,11 +412,11 @@ public class WorkshopClient : Game
     {
         Task currentTask = Task.UpdateListed;
             
-        foreach (var toUpdate in record.ToFetch)
+        foreach (var toUpdate in record.toProcess)
         {
             Task nextTask = Task.None;
             bool addRetry = false;
-            string command = String.Format("\"{0}\" up \"{1}\"", SVN_CLI_EXE, Path.Combine(Directory.GetCurrentDirectory(), record.PupilGroupName, toUpdate));
+            string command = String.Format("\"{0}\" {1} up \"{2}\"", SVN_CLI_EXE, SVN_OPTIONS, Path.Combine(Directory.GetCurrentDirectory(), record.PupilGroupName, toUpdate));
             GenericProcessor(record, currentTask, nextTask, command, -1, addRetry);
         }
     }
@@ -451,11 +477,89 @@ public class WorkshopClient : Game
     {
         Task currentTask = Task.RunTool;
         Task nextTask = Task.None;
-        string command = String.Format("\"{0}\" {1}", tool.ToolExe, tool.ToolAgs);
+        string command = String.Format("\"{0}\" \"{1}\"", tool.ToolExe, fileToEdit);
         GenericProcessor(record, currentTask, nextTask, command);
     }
 
+    void ProcessCheckModified(GameRecord record)
+    {
+        Task currentTask = Task.CheckForModified;
+        Task nextTask = Task.ChooseFromModified;
+        bool addRetry = false;
+        string command = String.Format("\"{0}\" {1} status \"{2}\"", SVN_CLI_EXE, SVN_OPTIONS, Path.Combine(Directory.GetCurrentDirectory(), record.PupilGroupName));
+        GenericProcessor(record, currentTask, nextTask, command, -1, addRetry);
+    }
 
+
+    void ProcessChooseModified(GameRecord record)
+    {
+        List<string> shortSelectionLabels = new List<string>();
+        string basePath = Path.Combine(Directory.GetCurrentDirectory(), record.PupilGroupName, record.ContentFolder);
+        foreach (var fn in newAndModifiedFileNames)
+	    {
+            int nameStartPos = fn.IndexOf(record.ContentFolder) + record.ContentFolder.Length;
+            string shortfn = fn.Substring(nameStartPos);
+            shortSelectionLabels.Add(shortfn);
+	    }
+        shortSelectionLabels.Add("Peruuta");
+
+        MultiSelectWindow selectToSendWindow = new MultiSelectWindow("Valitse peliin lisättävä tiedosto", shortSelectionLabels.ToArray());
+        selectToSendWindow.BorderColor = Color.DarkGray;
+        selectToSendWindow.ItemSelected += ModifiedFileSelected;
+        selectToSendWindow.DefaultCancel = shortSelectionLabels.Count - 1;
+        Add(selectToSendWindow);
+    }
+
+    void ModifiedFileSelected(int selection)
+    {
+        GameRecord addCommitFilesRecord = workshopGame.Clone() as GameRecord;
+        addCommitFilesRecord.toProcess = new List<string>();
+
+        //Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.ContentFolder);
+
+        if (selection>=0 && selection<newAndModifiedFileNames.Count)
+        {
+            string fileToSend = newAndModifiedFileNames[selection];
+            addCommitFilesRecord.toProcess.Add(fileToSend);
+
+            char fileToSendState = newAndModifiedFileStates[selection];
+            if (fileToSendState=='?')
+            {
+                taskQueue.Enqueue(new Tuple<GameRecord, Task>(addCommitFilesRecord, Task.AddListed));
+                taskQueue.Enqueue(new Tuple<GameRecord, Task>(addCommitFilesRecord, Task.CommitListed));
+            }
+            else if (fileToSendState=='M' || fileToSendState=='A')
+            {
+                taskQueue.Enqueue(new Tuple<GameRecord, Task>(addCommitFilesRecord, Task.CommitListed));
+            }
+        }
+    }
+
+    void ProcessAddListed(GameRecord record)
+    {
+        Task currentTask = Task.AddListed;
+        foreach (var toAdd in record.toProcess)
+        {
+            Task nextTask = Task.None;
+            bool addRetry = false;
+            string command = String.Format("\"{0}\" {1} add \"{2}\"", SVN_CLI_EXE, SVN_OPTIONS, toAdd);
+            GenericProcessor(record, currentTask, nextTask, command, -1, addRetry);
+        }
+    }
+
+    void ProcessCommitListed(GameRecord record)
+    {
+        Task currentTask = Task.CommitListed;
+        foreach (var toCommit in record.toProcess)
+        {
+            string userName = Environment.UserName; 
+            Task nextTask = Task.None;
+            bool addRetry = false;
+            string command = String.Format("\"{0}\" {1} commit \"{2}\" -m \"Automated commit by {3}\"", SVN_CLI_EXE, SVN_OPTIONS, toCommit, userName);
+            GenericProcessor(record, currentTask, nextTask, command, 3000, addRetry);
+        }
+    }
+    
 
     private Status GenericProcessor(GameRecord record, Task currentTask, Task nextTask, string command, int runTimeout = -1, bool addRetry = true)
     {
@@ -466,13 +570,6 @@ public class WorkshopClient : Game
             stateQueueMutex.WaitOne();
             stateQueue.Enqueue(new Tuple<GameRecord, Task, Status>(record, currentTask, Status.Wait));
             stateQueueMutex.ReleaseMutex();
-
-            bool wasTopmost = false;
-            if (currentTask == Task.RunGame && topmost)
-            {
-                SetWindowTopmost(false);
-                wasTopmost = true;
-            }
 
             // split
             string exepart = command.Substring(0, command.IndexOf(".exe\"") + 5);
@@ -493,6 +590,7 @@ public class WorkshopClient : Game
             startInfo.CreateNoWindow = true;
             startInfo.UseShellExecute = false;
             startInfo.RedirectStandardError = true;
+            startInfo.RedirectStandardInput = true;
             startInfo.RedirectStandardOutput = true;
 
             activeCliProcess.StartInfo = startInfo;
@@ -510,10 +608,11 @@ public class WorkshopClient : Game
             {
                 activeCliProcess.WaitForExit(runTimeout);
             }
-
-            if (currentTask == Task.RunGame && wasTopmost)
+            // The --password option for svn.exe does not work, therefore send it using stdin
+            if (currentTask == Task.CommitListed)
             {
-                SetWindowTopmost(true);
+                activeCliProcess.StandardInput.WriteLine( SVN_PASSWD );
+                activeCliProcess.WaitForExit(runTimeout);
             }
         }
         if (activeCliProcess.HasExited)
@@ -524,12 +623,25 @@ public class WorkshopClient : Game
                 stateQueueMutex.WaitOne();
                 messageQueue.Enqueue("Process exited with CODE 0. Output:");
 
+                if (currentTask == Task.CheckForModified)
+                {
+                    newAndModifiedFileNames = new List<string>();
+                    newAndModifiedFileStates = new List<char>();
+                }
+
                 StreamReader sr = activeCliProcess.StandardOutput;
                 while (!sr.EndOfStream)
                 {
                     String s = sr.ReadLine();
                     if (s != "")
                     {
+                        if (currentTask == Task.CheckForModified)
+                        {
+                            string[] parts = s.Split();
+                            newAndModifiedFileNames.Add(s.Substring(s.IndexOf("C:\\")));
+                            newAndModifiedFileStates.Add(parts.First()[0]);
+                        }
+
                         Trace.WriteLine(s);
                         //messageQueue.Enqueue(s);
                     }
