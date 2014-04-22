@@ -70,7 +70,7 @@ public class WorkshopClient : Game
 
     bool processing = false;
     bool paused = false;
-    bool topmost = false;
+    bool topmost = true;
     bool wasTopmost = false;
 
     // Multithreading support
@@ -122,7 +122,7 @@ public class WorkshopClient : Game
         IsMouseVisible = true;
 
         PhoneBackButton.Listen(ConfirmExit, "Lopeta peli");
-        Keyboard.Listen(Key.Escape, Jypeli.ButtonState.Pressed, ConfirmExit, "Lopeta peli");
+        //Keyboard.Listen(Key.Escape, Jypeli.ButtonState.Pressed, ConfirmExit, "Lopeta peli");
         Keyboard.Listen(Key.P, Jypeli.ButtonState.Pressed, PauseProcess, "Pistä tauolle");
         Keyboard.Listen(Key.T, Jypeli.ButtonState.Pressed, ToggleTopmost, "Tuo päällimmäiseksi");
         Exiting += StopThread;
@@ -245,11 +245,14 @@ public class WorkshopClient : Game
 
     void SetWindowTopmost(bool topmost)
     {
+        int HEADER_HT = 25;
+        int BORDER_WT = 3;
+
         int screenHt = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
         int screenWt = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
         if (topmost)
         {
-            User32.SetWindowPos((uint)this.Window.Handle, HWND_TOPMOST, 0, 0, screenWt, screenHt, 0);
+            User32.SetWindowPos((uint)this.Window.Handle, HWND_TOPMOST, -BORDER_WT, -HEADER_HT, screenWt + BORDER_WT * 2, screenHt + HEADER_HT + BORDER_WT, 0);
         }
         else
         {
