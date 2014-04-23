@@ -37,8 +37,18 @@ class ContentTool
 
 class User32
 {
+    public const int SW_MAXIMIZE = 3;
+    public const int SW_MINIMIZE = 6;
+
+    public const int HWND_TOP = 0;
+    public const int HWND_TOPMOST = -1;
+
     [DllImport("user32.dll")]
     public static extern void SetWindowPos(uint Hwnd, int Level, int X, int Y, int W, int H, uint Flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindow(IntPtr hWnd, uint nCmdShow);
 }
 
 /*
@@ -49,9 +59,10 @@ class User32
 */
 public class WorkshopClient : Game
 {
-    static int HWND_TOP = 0;
-    static int HWND_TOPMOST = -1;
+    
     static int PROCESS_CHECK_INTERVAL = 100;
+    static int PROCESS_CHECK_INTERVAL_BACKGROUND = 3000;
+
 
     // TODO: replace these with the ones loaded from an ini file
     string SVN_CLI_EXE = @"C:\Users\opetus01\Downloads\svn-win32-1.8.8\svn-win32-1.8.8\bin\svn.exe";
@@ -67,6 +78,7 @@ public class WorkshopClient : Game
     ContentTool tool;
     Process activeCliProcess;
     string fileToEdit;
+    int checkInterval = PROCESS_CHECK_INTERVAL;
 
     bool processing = false;
     bool paused = false;
@@ -116,7 +128,7 @@ public class WorkshopClient : Game
     public override void Begin()
     {
         //SetWindowSize(800, 600);
-        SetWindowTopmost(topmost);
+        SetWindowTopmost(topmost, false);
         Level.Background.Color = Color.White;
 
         IsMouseVisible = true;
@@ -239,11 +251,11 @@ public class WorkshopClient : Game
     void ToggleTopmost()
     {
         topmost = !topmost;
-        SetWindowTopmost(topmost);
+        SetWindowTopmost(topmost, false);
     }
     #endregion
 
-    void SetWindowTopmost(bool topmost)
+    void SetWindowTopmost(bool topmost, bool minimize)
     {
         int HEADER_HT = 25;
         int BORDER_WT = 3;
@@ -252,11 +264,16 @@ public class WorkshopClient : Game
         int screenWt = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
         if (topmost)
         {
-            User32.SetWindowPos((uint)this.Window.Handle, HWND_TOPMOST, -BORDER_WT, -HEADER_HT, screenWt + BORDER_WT * 2, screenHt + HEADER_HT + BORDER_WT, 0);
+            User32.ShowWindow((IntPtr)this.Window.Handle, User32.SW_MAXIMIZE); 
+            User32.SetWindowPos((uint)this.Window.Handle, User32.HWND_TOPMOST, -BORDER_WT, -HEADER_HT, screenWt + BORDER_WT * 2, screenHt + HEADER_HT + BORDER_WT, 0);
         }
         else
         {
-            User32.SetWindowPos((uint)this.Window.Handle, HWND_TOP, 0, 0, screenWt, screenHt, 0);
+            User32.SetWindowPos((uint)this.Window.Handle, User32.HWND_TOP, 0, 0, screenWt, screenHt, 0);
+            if (minimize)
+            {
+                User32.ShowWindow((IntPtr)this.Window.Handle, User32.SW_MINIMIZE); 
+            }
         }
         this.topmost = topmost;
     }
@@ -286,12 +303,43 @@ public class WorkshopClient : Game
                 {
                     if (topmost && stateChange.Item3==Status.Wait)
                     {
-                        SetWindowTopmost(false);
+                        SetWindowTopmost(false,true);
                         wasTopmost = true;
+                        checkInterval = PROCESS_CHECK_INTERVAL_BACKGROUND;
+                        if (!IsPaused)
+                            Pause();
                     }
                     else if (wasTopmost == true && (stateChange.Item3 == Status.OK || stateChange.Item3 == Status.Fail))
                     {
-                        SetWindowTopmost(true);
+                        SetWindowTopmost(true, false);
+                        checkInterval = PROCESS_CHECK_INTERVAL;
+                        if (IsPaused)
+                            Pause(); // unpause
+                    }
+                }
+            }
+            stateQueueMutex.ReleaseMutex();
+        }
+    }
+    protected override void PausedUpdate(Time time)
+    {
+        base.PausedUpdate(time);
+        var hasOne = stateQueueMutex.WaitOne(10);
+        if (hasOne)
+        {
+            while (stateQueue.Count > 0)
+            {
+                var stateChange = stateQueue.Dequeue();
+                var gameName = stateChange.Item1.GameName;
+
+                if (stateChange.Item2 == Task.RunGame || stateChange.Item2 == Task.RunTool)
+                {
+                    if (wasTopmost == true && (stateChange.Item3 == Status.OK || stateChange.Item3 == Status.Fail))
+                    {
+                        SetWindowTopmost(true, false);
+                        checkInterval = PROCESS_CHECK_INTERVAL;
+                        if (IsPaused)
+                            Pause(); // unpause
                     }
                 }
             }
@@ -319,7 +367,7 @@ public class WorkshopClient : Game
         {
             if (processing || paused || taskQueue.Count == 0)
             {
-                System.Threading.Thread.Sleep((int)(PROCESS_CHECK_INTERVAL));
+                System.Threading.Thread.Sleep(checkInterval);
                 continue;
             }
 
@@ -584,6 +632,11 @@ public class WorkshopClient : Game
 
             startInfo.FileName = exepart;
             startInfo.Arguments = argpart;
+
+            if (currentTask == Task.RunGame)
+            {
+                startInfo.WorkingDirectory = Path.GetDirectoryName(exepart.Replace('"', ' ').Trim());
+            }
 
             /*
             startInfo.FileName = "cmd.exe";
