@@ -41,6 +41,7 @@ class User32
     public const int SW_MINIMIZE = 6;
 
     public const int HWND_TOP = 0;
+    public const int HWND_BOTTOM = 1;
     public const int HWND_TOPMOST = -1;
 
     [DllImport("user32.dll")]
@@ -95,6 +96,10 @@ public class WorkshopClient : Game
     List<string> newAndModifiedFileNames = new List<string>();
     List<char> newAndModifiedFileStates = new List<char>();
 
+    PushButton playGameButton;
+    PushButton createContentButton;
+    PushButton addContentButton;
+
     enum Task
     {
         Checkout,
@@ -148,10 +153,9 @@ public class WorkshopClient : Game
         Add(logo);
 
         // Create buttons
-        PushButton playGameButton = new PushButton(400, 50, "Pelaa uusinta versiota pelistä");
-        // TODO: Nämä voisi lukea ini tiedostosta ja niitä voisi olla monta? Esim. "piirrä uusi kartta" "piirrä uusi pelihahmo" jne.
-        PushButton createContentButton = new PushButton(400, 50, "Tee uusi "+tool.ContentDescription+" peliin");
-        PushButton addContentButton = new PushButton(400, 50, "Lisää tekemäsi sisältö peliin");
+        playGameButton = new PushButton(400, 50, "Pelaa uusinta versiota pelistä");
+        createContentButton = new PushButton(400, 50, "Tee uusi "+tool.ContentDescription+" peliin");
+        addContentButton = new PushButton(400, 50, "Lisää tekemäsi sisältö peliin");
 
         playGameButton.Clicked += PlayGamePressed;
         createContentButton.Clicked += CreateContentPressed;
@@ -166,6 +170,8 @@ public class WorkshopClient : Game
 
         taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.Checkout));
         StartThreadedTaskListProcessor();
+
+        EnableButtons(true);
     }
     void StopThread()
     {
@@ -173,28 +179,42 @@ public class WorkshopClient : Game
     }
     void PlayGamePressed()
     {
+        if (paused) return; // Do not enque tasks on paused
         taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.UpdateListed));
         taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.Compile));
         taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.RunGame));
     }
     void CreateContentPressed()
     {
-        InputWindow askFileNameWindow = new InputWindow("Anna luotavalle "+tool.ContentDescription+"tiedostolle nimi");
-        askFileNameWindow.TextEntered += ContentNameGiven;
-        Add(askFileNameWindow);
+        if (paused) return; // Do not enque tasks on paused
+        if (tool.TemplateFile != "")
+        {
+            InputWindow askFileNameWindow = new InputWindow("Anna luotavalle " + tool.ContentDescription + "tiedostolle nimi");
+            askFileNameWindow.TextEntered += ContentNameGiven;
+            Add(askFileNameWindow);
+        }
+        else
+        {
+            CreateTemplateCopyAndStartTool();
+        }
     }
     void ContentNameGiven(InputWindow inputWindow)
+    {
+        CreateTemplateCopyAndStartTool(inputWindow.InputBox.Text);
+    }
+
+    private void CreateTemplateCopyAndStartTool(string contentFileNameToCreate="")
     {
         string contentBaseFolder = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.ContentFolder);
         string templateBaseFolder = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.TemplateFolder);
 
         string templateFilePath = Path.Combine(templateBaseFolder, tool.TemplateFile);
-        string contentFileName = Path.GetFileNameWithoutExtension( inputWindow.InputBox.Text )+tool.ContentExt;
+        string contentFileName = Path.GetFileNameWithoutExtension(contentFileNameToCreate) + tool.ContentExt;
         string contentFilePath = Path.Combine(contentBaseFolder, CONTENT_SUBFOLDER, contentFileName);
 
         if (File.Exists(contentFilePath))
         {
-            MessageDisplay.Add( "Tämä nimi on jo varattu. Paina nappia uudelleen ja keksi toinen nimi." );
+            MessageDisplay.Add("Tämä nimi on jo varattu. Paina nappia uudelleen ja keksi toinen nimi.");
         }
         else
         {
@@ -212,6 +232,7 @@ public class WorkshopClient : Game
     }
     void AddContentPressed()
     {
+        if (paused) return; // Do not enque tasks on paused
         taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.CheckForModified));
     }
     private void ReadGameInfoAndSettings()
@@ -264,15 +285,15 @@ public class WorkshopClient : Game
         int screenWt = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
         if (topmost)
         {
-            User32.ShowWindow((IntPtr)this.Window.Handle, User32.SW_MAXIMIZE); 
+            //User32.ShowWindow((IntPtr)this.Window.Handle, User32.SW_MAXIMIZE); 
             User32.SetWindowPos((uint)this.Window.Handle, User32.HWND_TOPMOST, -BORDER_WT, -HEADER_HT, screenWt + BORDER_WT * 2, screenHt + HEADER_HT + BORDER_WT, 0);
         }
         else
         {
-            User32.SetWindowPos((uint)this.Window.Handle, User32.HWND_TOP, 0, 0, screenWt, screenHt, 0);
+            User32.SetWindowPos((uint)this.Window.Handle, User32.HWND_BOTTOM, -BORDER_WT, -HEADER_HT, screenWt + BORDER_WT * 2, screenHt + HEADER_HT + BORDER_WT, 0);
             if (minimize)
             {
-                User32.ShowWindow((IntPtr)this.Window.Handle, User32.SW_MINIMIZE); 
+                //User32.ShowWindow((IntPtr)this.Window.Handle, User32.SW_MINIMIZE); 
             }
         }
         this.topmost = topmost;
@@ -306,6 +327,7 @@ public class WorkshopClient : Game
                         SetWindowTopmost(false,true);
                         wasTopmost = true;
                         checkInterval = PROCESS_CHECK_INTERVAL_BACKGROUND;
+                        EnableButtons(false);
                         if (!IsPaused)
                             Pause();
                     }
@@ -313,6 +335,7 @@ public class WorkshopClient : Game
                     {
                         SetWindowTopmost(true, false);
                         checkInterval = PROCESS_CHECK_INTERVAL;
+                        EnableButtons(true);
                         if (IsPaused)
                             Pause(); // unpause
                     }
@@ -338,12 +361,29 @@ public class WorkshopClient : Game
                     {
                         SetWindowTopmost(true, false);
                         checkInterval = PROCESS_CHECK_INTERVAL;
+                        EnableButtons(true);
                         if (IsPaused)
                             Pause(); // unpause
                     }
                 }
             }
             stateQueueMutex.ReleaseMutex();
+        }
+    }
+
+    void EnableButtons(bool enable)
+    {
+        if (enable)
+        {
+            playGameButton.Color = Color.Darker( Color.Yellow, 100 );
+            createContentButton.Color =  Color.Darker( Color.Yellow, 100 );
+            addContentButton.Color =  Color.Darker( Color.Yellow, 100 );
+        }
+        else
+        {
+            playGameButton.Color = Color.DarkGray;
+            createContentButton.Color = Color.DarkGray;
+            addContentButton.Color = Color.DarkGray;
         }
     }
 
