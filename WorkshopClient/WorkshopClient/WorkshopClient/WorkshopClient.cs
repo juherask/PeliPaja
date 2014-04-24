@@ -538,16 +538,20 @@ public class WorkshopClient : Game
         foreach (string file in Directory.EnumerateFiles(
             record.PupilGroupName, "*.exe", SearchOption.AllDirectories))
         {
-            if (gameExeName == "")
+            if (file.Contains("bin"))
             {
-                gameExeName = file;
-            }
-            else
-            {
-                stateQueueMutex.WaitOne();
-                messageQueue.Enqueue("Multiple game exes for the game, using " + gameExeName);
-                stateQueueMutex.ReleaseMutex();
-                break;
+                if (gameExeName == "")
+                {
+               
+                    gameExeName = file;
+                }
+                else
+                {
+                    stateQueueMutex.WaitOne();
+                    messageQueue.Enqueue("Multiple game exes for the game, using " + gameExeName);
+                    stateQueueMutex.ReleaseMutex();
+                    break;
+                }
             }
         }
         if (gameExeName == "")
@@ -718,7 +722,7 @@ public class WorkshopClient : Game
             if (activeCliProcess.ExitCode == 0)
             {
                 stateQueueMutex.WaitOne();
-                messageQueue.Enqueue("Process exited with CODE 0. Output:");
+                messageQueue.Enqueue("Process exited with CODE 0.");
 
                 if (currentTask == Task.CheckForModified)
                 {
@@ -757,7 +761,7 @@ public class WorkshopClient : Game
             else
             {
                 stateQueueMutex.WaitOne();
-                messageQueue.Enqueue("Process exited with CODE 1. Output:");
+                messageQueue.Enqueue("Process exited with CODE 1.");
 
 
                 StreamReader sro = activeCliProcess.StandardOutput;
