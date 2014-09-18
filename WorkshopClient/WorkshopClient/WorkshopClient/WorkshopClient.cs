@@ -32,6 +32,7 @@ class ContentTool
     public string ToolExe;
     public string TemplateFile;
     public string ContentExt;
+    public string ContentSubfolder;
     public string ContentDescription;
 }
 
@@ -66,17 +67,17 @@ public class WorkshopClient : Game
 
 
     // TODO: replace these with the ones loaded from an ini file
-    string SVN_CLI_EXE = @"C:\Users\opetus01\Downloads\svn-win32-1.8.8\svn-win32-1.8.8\bin\svn.exe";
+    //string SVN_CLI_EXE = @"C:\Users\opetus01\Downloads\svn-win32-1.8.8\svn-win32-1.8.8\bin\svn.exe";
+    string SVN_CLI_EXE = @"C:\Program Files\TortoiseSVN\bin\svn.exe";
     string MSBUILD_EXE = @"C:\Windows\Microsoft.NET\Framework\v4.0.30319\MsBuild.exe";
-    string SVN_OPTIONS = @"--username 'jypeliworkshop'";
-    string SVN_PASSWD = "qwerty12345";
+    string SVN_OPTIONS = @"--username 'sepeliry'";
+    string SVN_PASSWD = "jypeli09";
 
-    string CONTENT_EXT = ".png";
-    string CONTENT_SUBFOLDER = "Content";
+    int NUMBER_OF_TOOLS = 1;
 
     Queue<Tuple<GameRecord, Task>> taskQueue;
     GameRecord workshopGame;
-    ContentTool tool;
+    List<ContentTool> tools = new List<ContentTool>();
     Process activeCliProcess;
     string fileToEdit;
     int checkInterval = PROCESS_CHECK_INTERVAL;
@@ -96,8 +97,11 @@ public class WorkshopClient : Game
     List<string> newAndModifiedFileNames = new List<string>();
     List<char> newAndModifiedFileStates = new List<char>();
 
+    // Quickhack to pass on clicked tool to processor thread
+    ContentTool currentTool = null;
+
     PushButton playGameButton;
-    PushButton createContentButton;
+    List<PushButton> createContentButtons = new List<PushButton>();
     PushButton addContentButton;
 
     enum Task
@@ -153,19 +157,28 @@ public class WorkshopClient : Game
         Add(logo);
 
         // Create buttons
+        int totalBtnCnt = 1 + tools.Count + 6;
+        int iBtn = 2;
+        double step = Screen.Height / totalBtnCnt+2;
+        
         playGameButton = new PushButton(400, 50, "Pelaa uusinta versiota pelistä");
-        createContentButton = new PushButton(400, 50, "Tee uusi "+tool.ContentDescription+" peliin");
-        addContentButton = new PushButton(400, 50, "Lisää tekemäsi sisältö peliin");
-
+        playGameButton.Y = step * (totalBtnCnt / 2 - ++iBtn);
         playGameButton.Clicked += PlayGamePressed;
-        createContentButton.Clicked += CreateContentPressed;
-        addContentButton.Clicked += AddContentPressed;
-
-        playGameButton.Y = Screen.Height / 6;
         Add(playGameButton);
-        createContentButton.Y = 0;
-        Add(createContentButton);
-        addContentButton.Y = -Screen.Height / 6;
+
+        foreach (var tool in tools)
+        {
+            ContentTool loopToolRef = tool;
+            PushButton createContentButton = new PushButton(400, 50, "Tee uusi " + tool.ContentDescription + " peliin");
+            createContentButton.Clicked += () => CreateContentPressed(loopToolRef);
+            createContentButton.Y = step * (totalBtnCnt / 2 - ++iBtn);
+            Add(createContentButton);
+            createContentButtons.Add(createContentButton);
+        }
+        
+        addContentButton = new PushButton(400, 50, "Lisää tekemäsi sisältö peliin");
+        addContentButton.Y = step * (totalBtnCnt / 2 - ++iBtn);
+        addContentButton.Clicked += AddContentPressed;
         Add(addContentButton);
 
         taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.Checkout));
@@ -184,57 +197,155 @@ public class WorkshopClient : Game
         taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.Compile));
         taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.RunGame));
     }
-    void CreateContentPressed()
+    void CreateContentPressed(ContentTool tool)
     {
         if (paused) return; // Do not enque tasks on paused
-        if (tool.TemplateFile != "")
-        {
-            InputWindow askFileNameWindow = new InputWindow("Anna luotavalle " + tool.ContentDescription + "tiedostolle nimi");
-            askFileNameWindow.TextEntered += ContentNameGiven;
-            Add(askFileNameWindow);
+        currentTool = tool;
+        CreateTemplateCopyAndStartTool("uusi_"+tool.ContentSubfolder);
+    }
+
+    void ContentNameGiven(InputWindow inputWindow)
+    {
+        string namedName = inputWindow.InputBox.Text;
+
+        string newContentFilePath = "";
+        string namedContentFilePath = "";
+        GetContentFilePaths("uusi_" + currentTool.ContentSubfolder, inputWindow.InputBox.Text, ref newContentFilePath, ref namedContentFilePath);
+
+        if (inputWindow.InputBox.Text != "")
+        {    
+            if (File.Exists(namedContentFilePath))
+            {
+                MessageDisplay.Add("Tämä nimi on jo varattu. Paina nappia uudelleen ja keksi toinen nimi.");
+                NameContent();
+            }
+            else if (!File.Exists(newContentFilePath))
+            {
+                MessageDisplay.Add("Fataali virhe, uutta luotua sisältötiedostoa ei löydy");
+            }
+            else
+            {
+                System.IO.File.Move(newContentFilePath, namedContentFilePath);
+            }
         }
         else
         {
-            CreateTemplateCopyAndStartTool();
+            MultiSelectWindow valintaIkkuna = new MultiSelectWindow("Ilman nimeä tiedosto poistetaan. Oletko varma?", "Kyllä", "Ei");
+            valintaIkkuna.ItemSelected += new Action<int>(selection => NoNameConfirmation(selection, newContentFilePath));
+            Add(valintaIkkuna);
         }
     }
-    void ContentNameGiven(InputWindow inputWindow)
+    void NoNameConfirmation(int selection, string namelessFilePath)
     {
-        CreateTemplateCopyAndStartTool(inputWindow.InputBox.Text);
+        switch (selection)
+        {
+            case 0:
+                if (File.Exists(namelessFilePath))
+                    File.Delete(namelessFilePath);
+                break;
+            case 1:
+                NameContent();
+                break;
+            default:
+                break;
+        }
+    }
+
+    void GetContentFilePaths(string contentNameToCreate, string contentNameToRenameTo, ref string newContentFilePath, ref string namedContentFilePath)
+    {
+        string newContentFileName = Path.GetFileNameWithoutExtension(contentNameToCreate) + currentTool.ContentExt;
+        string namedContentFileName = Path.GetFileNameWithoutExtension(contentNameToRenameTo) + currentTool.ContentExt;
+
+        string contentBaseFolder = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.ContentFolder);
+        newContentFilePath = Path.Combine(contentBaseFolder, currentTool.ContentSubfolder, newContentFileName);
+        namedContentFilePath = Path.Combine(contentBaseFolder, currentTool.ContentSubfolder, namedContentFileName);
     }
 
     private void CreateTemplateCopyAndStartTool(string contentFileNameToCreate="")
     {
-        string contentBaseFolder = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.ContentFolder);
-        string templateBaseFolder = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.TemplateFolder);
+        string templateFilePath = GetTemplateFilePath();
 
-        string templateFilePath = Path.Combine(templateBaseFolder, tool.TemplateFile);
-        string contentFileName = Path.GetFileNameWithoutExtension(contentFileNameToCreate) + tool.ContentExt;
-        string contentFilePath = Path.Combine(contentBaseFolder, CONTENT_SUBFOLDER, contentFileName);
+        string newContentFilePath ="";
+        string namedContentFilePath ="";
+        GetContentFilePaths("uusi_" + currentTool.ContentSubfolder, "", ref newContentFilePath, ref namedContentFilePath);
 
-        if (File.Exists(contentFilePath))
+        if (currentTool.TemplateFile != "")
         {
-            MessageDisplay.Add("Tämä nimi on jo varattu. Paina nappia uudelleen ja keksi toinen nimi.");
+            if (File.Exists(newContentFilePath))
+                File.Delete(newContentFilePath);
+            File.Copy(templateFilePath, newContentFilePath);
+            fileToEdit = newContentFilePath;
         }
         else
         {
-            if (tool.TemplateFile != "")
+            fileToEdit = "";
+        }
+        taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.RunTool));
+        
+    }
+
+    private string GetTemplateFilePath()
+    {
+        string templateBaseFolder = Path.Combine(Directory.GetCurrentDirectory(), workshopGame.PupilGroupName, workshopGame.TemplateFolder);
+        string templateFilePath = Path.Combine(templateBaseFolder, currentTool.TemplateFile);
+        return templateFilePath;
+    }
+
+    // Crude byte to byte comparer
+    static bool FileEquals(string path1, string path2)
+    {
+        byte[] file1 = File.ReadAllBytes(path1);
+        byte[] file2 = File.ReadAllBytes(path2);
+        if (file1.Length == file2.Length)
+        {
+            for (int i = 0; i < file1.Length; i++)
             {
-                File.Copy(templateFilePath, contentFilePath);
-                fileToEdit = contentFilePath;
+                if (file1[i] != file2[i])
+                {
+                    return false;
+                }
             }
-            else
+            return true;
+        }
+        return false;
+    }
+
+    void NameContent()
+    {
+        if (currentTool.TemplateFile != "")
+        {
+            string templateFilePath = GetTemplateFilePath();
+            string newContentFilePath = "";
+            string namedContentFilePath = "";
+            GetContentFilePaths("uusi_" + currentTool.ContentSubfolder, "", ref newContentFilePath, ref namedContentFilePath);
+
+            // Check that file has been changed (from the template)
+            if (File.Exists(templateFilePath) &&
+                File.Exists(newContentFilePath) &&
+                !FileEquals(templateFilePath, newContentFilePath))
             {
-                fileToEdit = "";
+                InputWindow askFileNameWindow = new InputWindow("TÄRKEÄÄ: Anna luodulle " + currentTool.ContentDescription + "-tiedostolle kuvaava nimi");
+                askFileNameWindow.TextEntered += ContentNameGiven;
+                Add(askFileNameWindow);
             }
-            taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.RunTool));
+            else if (File.Exists(newContentFilePath))
+            {
+                File.Delete(newContentFilePath);
+            }
+        }
+        else
+        {
+            // No template -> named in the tool
         }
     }
+
+
     void AddContentPressed()
     {
         if (paused) return; // Do not enque tasks on paused
         taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.CheckForModified));
     }
+
     private void ReadGameInfoAndSettings()
     {
         IniFile settingsFile = new IniFile("settings.ini");
@@ -242,14 +353,22 @@ public class WorkshopClient : Game
         SVN_OPTIONS = settingsFile.GetSetting("settings", "svn_options");
         SVN_PASSWD = settingsFile.GetSetting("settings", "svn_passwd");
         MSBUILD_EXE = settingsFile.GetSetting("settings", "msbuild_exe");
-        CONTENT_SUBFOLDER = settingsFile.GetSetting("tools", "content_subfolder");
 
-		tool = new ContentTool(){
-            ToolExe=settingsFile.GetSetting("tools", "add_content_exe" ),
-            TemplateFile=settingsFile.GetSetting("tools", "content_template_file" ),
-            ContentDescription = settingsFile.GetSetting("tools", "content_description"),
-            ContentExt = settingsFile.GetSetting("tools", "content_ext")
-        };
+        NUMBER_OF_TOOLS = Int32.Parse(settingsFile.GetSetting("tools", "number_of_tools"));
+
+        // 1 based indexing!
+        for (int i = 1; i <= NUMBER_OF_TOOLS; i++)
+        {
+            string prefix = String.Format("tool{0}_", i);
+            tools.Add(new ContentTool()
+            {
+                ToolExe = settingsFile.GetSetting("tools", prefix + "add_content_exe"),
+                TemplateFile = settingsFile.GetSetting("tools", prefix + "content_template_file"),
+                ContentDescription = settingsFile.GetSetting("tools", prefix + "content_description"),
+                ContentSubfolder = settingsFile.GetSetting("tools", prefix + "content_subfolder"),
+                ContentExt = settingsFile.GetSetting("tools", prefix + "content_ext")
+            });
+        }
 
         // Game
         workshopGame = new GameRecord(){
@@ -278,6 +397,10 @@ public class WorkshopClient : Game
 
     void SetWindowTopmost(bool topmost, bool minimize)
     {
+        IsFullScreen = topmost;
+        return;
+
+        /* It seems IsFullScreen works better (no cursor aligning problems)
         int HEADER_HT = 25;
         int BORDER_WT = 3;
 
@@ -296,7 +419,7 @@ public class WorkshopClient : Game
                 //User32.ShowWindow((IntPtr)this.Window.Handle, User32.SW_MINIMIZE); 
             }
         }
-        this.topmost = topmost;
+        this.topmost = topmost;*/
     }
 
     /// <summary>
@@ -340,6 +463,12 @@ public class WorkshopClient : Game
                             Pause(); // unpause
                     }
                 }
+
+                if (stateChange.Item2 == Task.RunTool && stateChange.Item3 == Status.OK)
+                {
+                    // Tool was run. Check if new created content needs to be renamed
+                    NameContent();
+                }
             }
             stateQueueMutex.ReleaseMutex();
         }
@@ -366,6 +495,11 @@ public class WorkshopClient : Game
                             Pause(); // unpause
                     }
                 }
+                if (stateChange.Item2 == Task.RunTool && stateChange.Item3 == Status.OK)
+                {
+                    // Tool was run. Check if new created content needs to be renamed
+                    NameContent();
+                }
             }
             stateQueueMutex.ReleaseMutex();
         }
@@ -375,14 +509,20 @@ public class WorkshopClient : Game
     {
         if (enable)
         {
-            playGameButton.Color = Color.Darker( Color.Yellow, 100 );
-            createContentButton.Color =  Color.Darker( Color.Yellow, 100 );
-            addContentButton.Color =  Color.Darker( Color.Yellow, 100 );
+            playGameButton.Color = Color.Darker( Color.LightGreen, 100 );
+            foreach (var createContentButton in createContentButtons)
+            {
+                createContentButton.Color = Color.Darker(Color.Yellow, 100);
+            }
+            addContentButton.Color =  Color.Darker( Color.Pink, 100 );
         }
         else
         {
             playGameButton.Color = Color.DarkGray;
-            createContentButton.Color = Color.DarkGray;
+            foreach (var createContentButton in createContentButtons)
+            {
+                createContentButton.Color = Color.DarkGray;
+            }
             addContentButton.Color = Color.DarkGray;
         }
     }
@@ -572,7 +712,7 @@ public class WorkshopClient : Game
     {
         Task currentTask = Task.RunTool;
         Task nextTask = Task.None;
-        string command = String.Format("\"{0}\" \"{1}\"", tool.ToolExe, fileToEdit);
+        string command = String.Format("\"{0}\" \"{1}\"", currentTool.ToolExe, fileToEdit);
         GenericProcessor(record, currentTask, nextTask, command);
     }
 
@@ -694,6 +834,9 @@ public class WorkshopClient : Game
             startInfo.RedirectStandardOutput = true;
 
             activeCliProcess.StartInfo = startInfo;
+            // TODO: DEBUG. REMOVE!!
+            //return Status.OK;
+
             activeCliProcess.Start();
 
             //messageQueueMutex.WaitOne();
