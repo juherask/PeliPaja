@@ -85,6 +85,7 @@ public class WorkshopClient : Game
     bool processing = false;
     bool paused = false;
     bool topmost = true;
+    bool loopaction = false;
     bool wasTopmost = false;
 
     // Multithreading support
@@ -146,6 +147,7 @@ public class WorkshopClient : Game
         //Keyboard.Listen(Key.Escape, Jypeli.ButtonState.Pressed, ConfirmExit, "Lopeta peli");
         Keyboard.Listen(Key.P, Jypeli.ButtonState.Pressed, PauseProcess, "Pistä tauolle");
         Keyboard.Listen(Key.T, Jypeli.ButtonState.Pressed, ToggleTopmost, "Tuo päällimmäiseksi");
+        Keyboard.Listen(Key.L, Jypeli.ButtonState.Pressed, LoopAction, "Toista toimintoa");
         Exiting += StopThread;
 
         ReadGameInfoAndSettings();
@@ -386,12 +388,25 @@ public class WorkshopClient : Game
     void PauseProcess()
     {
         paused = !paused;
+        if (paused)
+            MessageDisplay.Add("Client is paused.");
+        else
+            MessageDisplay.Add("Client resumes.");
     }
 
     void ToggleTopmost()
     {
         topmost = !topmost;
         SetWindowTopmost(topmost, false);
+    }
+
+    void LoopAction()
+    {
+        loopaction = !loopaction;
+        if (loopaction)
+            MessageDisplay.Add("Loop RunGame action Enabled.");
+        else
+            MessageDisplay.Add("Loop RunGame action Disabled.");
     }
     #endregion
 
@@ -469,6 +484,16 @@ public class WorkshopClient : Game
                     // Tool was run. Check if new created content needs to be renamed
                     NameContent();
                 }
+
+                if (stateChange.Item2 == Task.RunGame && stateChange.Item3 == Status.OK && loopaction)
+                {
+                    // Repeat action.
+                    taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.UpdateListed));
+                    taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.Compile));
+                    taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.RunGame));
+                }
+
+                
             }
             stateQueueMutex.ReleaseMutex();
         }
@@ -499,6 +524,13 @@ public class WorkshopClient : Game
                 {
                     // Tool was run. Check if new created content needs to be renamed
                     NameContent();
+                }
+                if (stateChange.Item2 == Task.RunGame && stateChange.Item3 == Status.OK && loopaction)
+                {
+                    // Repeat action.
+                    taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.UpdateListed));
+                    taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.Compile));
+                    taskQueue.Enqueue(new Tuple<GameRecord, Task>(workshopGame, Task.RunGame));
                 }
             }
             stateQueueMutex.ReleaseMutex();
