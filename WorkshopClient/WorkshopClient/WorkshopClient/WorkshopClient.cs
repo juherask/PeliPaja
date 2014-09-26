@@ -406,7 +406,14 @@ public class WorkshopClient : Game
         if (loopaction)
             MessageDisplay.Add("Loop RunGame action Enabled.");
         else
+        {
             MessageDisplay.Add("Loop RunGame action Disabled.");
+
+            while (taskQueue.Count > 0)
+            {
+                taskQueue.Dequeue();
+            }
+        }
     }
     #endregion
 
