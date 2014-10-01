@@ -111,6 +111,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DataStructures.cs" />
     <Compile Include="IniFile.cs" />
     <Compile Include="WorkshopClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
