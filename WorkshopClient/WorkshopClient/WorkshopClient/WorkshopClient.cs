@@ -92,10 +92,10 @@ public class WorkshopClient : Game
 
     public override void Begin()
     {
-/*#if DEBUG
+#if DEBUG
         showDebug = true;
         SetWindowSize(1024, 768);
-#endif*/
+#endif
         SetWindowTopmost(topmost);
         Level.Background.Color = Color.White;
 
@@ -900,7 +900,8 @@ public class WorkshopClient : Game
             startInfo.FileName = exepart;
             startInfo.Arguments = argpart;
 
-            if (currentTask == Task.RunGame)
+            // TODO: Sfxr is quickhack, better to do it in a way that is settable in tools for settings.ini 
+            if (currentTask == Task.RunGame || exepart.Contains("sfxr"))
             {
                 startInfo.WorkingDirectory = Path.GetDirectoryName(exepart.Replace('"', ' ').Trim());
             }
