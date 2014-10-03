@@ -37,7 +37,7 @@ Lopuksi, valmistelleksasi työpisteen:
 4. Commitoi kerran TortoiseSVN:llä joku pikkumuutos (esim yksi välilyönti lisää README.md -tiedostoon) GitHubiin ja ruksi, "tallenna salasana". Sisältöjen lisäys peliin ei onnistu jos salasanakysely on päällä. Huom! Käytä sitä Pelipajaa varten luomaasi tunnusta ja salasanaa, jolla forkkasit PajaPeli -Github säiliön yllä.
 5. Käynnistä työpajan asiakasohjelma ```WorkshopClient.exe```.
 
-== Käyttö ==
+## Käyttö
 
 Pelipajan osallistuja tekee peliä allakuvatun asiakasohjelman käyttöliittymän kautta (kuva alla):
 
@@ -46,11 +46,11 @@ Pelipajan osallistuja tekee peliä allakuvatun asiakasohjelman käyttöliittymä
 * Painamalla ```Pelaa uusinta versiota pelistä``` osallistuja voi pelata PeliPajassa syntyvää peliä. Pellin alla tapahtuu seuraavaa: asikasohjelma hakee versionhallinnasta (SVN) PajaPelin viimeisimmät lähdekoodi- ja sisältötiedostot, kääntää pelin käyttäen ```msbuild.exe```-työkalua ja käynnistää syntyneen pelibinäärin (```Pajapeli.exe```).
 * Painamalla ```Tee uusi pelihahmo peliin``` peliin lisätään uusi pelaajahahmo tai vihollinen. Kun nappia on painettu, aukeaa Paint.Net ohjelmassa tyhjä 50x50 kokoinen kuva, jonka vasemman yläkulman pikselin oletusväri määrää että kyseessä on pelaajahahmo. Jos kyiseisen pikselin värin vaihtaa Paint.Netin paletin äärimmäisen oikean yläkulman fuksianpunaiseksi, tulkitaan piirretty hahmo viholliseksi. Käyttämällä mitä tahansa muuta väriä, voi tehdä erikoistuneita vihollisia, mutta tällöin kyseisen värisen pikselin pitää esiintyä jossain kentässä/kartassa tai vihollinen ei ilmaannu (katso "Tee uusi kartta peliin" alla). Tehtyä hahmoa ei tallenneta nimellä, vaan tallennetaan nimeämättä (```CTRL```+```S```), jonka jälkeen Paint.Netin voi sulkea ruksista, jonka jälkeen asiakasohjelma palaa ruudulle. Asiakasohjelma pyytää vielä nimeämään hahmon, jonka jälkeen painamalla ```Pelaa uusinta versiota pelistä``` voi ihastella omaa tekelettään pelissä. Jos on niin tyytyväinen taiteeseensa, että haluaa laittaa hahmon muidenkin peleihin, tulee painaa ```Lisää tekemäsi sisältö peliin```. Tästä toiminnosta lisää alempana.
 
-== Konfigurointi ==
+## Konfigurointi
 
 TODO: Kirjoita settings.ini:n käyttöohje.
 
-== Kysymyksiä ja Vastauksia ==
+## Kysymyksiä ja Vastauksia
 
 Q: Tarvitseeko Pelipajan koneille todella asentaa Visual C# (Express).
 V: Ei välttämättä, jos pajassa ei ole tarkoitus koodata. Tällöin riittää, että asentaa [XNA4.0 redistributablen](http://www.microsoft.com/en-us/download/details.aspx?id=20914) ja [Jypelin sen asennusohjelmalla]()

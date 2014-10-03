@@ -93,10 +93,12 @@ public class WorkshopClient : Game
     public override void Begin()
     {
 #if DEBUG
-        showDebug = true;
         SetWindowSize(1024, 768);
-#endif
+        showDebug = true;
+        IsFullScreen = false;
+#else
         SetWindowTopmost(topmost);
+#endif
         Level.Background.Color = Color.White;
 
         IsMouseVisible = true;
