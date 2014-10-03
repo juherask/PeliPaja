@@ -1,40 +1,50 @@
 PeliPaja
 ========
 
-== Johdanto ==
+## Johdanto
 Pelipajan tarkoitus on tutustuttaa osallistujat pelien tekemisen eri osa-alueisiin yhteisen tietokonepeliprojektin avulla. Työpajassa voi joko piirtää peliin omia pelihahmoja tai kerättäviä esineitä, suunnitella peliin karttoja, säveltää musiikkia tai vaikka ohjelmoida - sen mukaan mikä pelin tekemisen osa-alue eniten kiinnostaa. Peliä voi myös koko ajan pelata, joten pelipajassa pääsee kokeilemaan, pystyykö pelaamaan kaverin (tai itsensä!)
 suunnitteleman kentän läpi.
 
-== Valmistelut ==
-Pelipajassa tulee olla riittävästi tietokoneita. Koska osallistujat voivat vuorotella tai tehdä sisältöjä yhdessä saman koneen ääressä, jokaiselle ei tarvitse kuitenkaan olla omaa konetta. Koneisiin on asennettu [Jypeli](https://trac.cc.jyu.fi/projects/npo/wiki/KurssiSoftat), [Paint.NET](http://www.getpaint.net/download.html#download) ja [TortoiseSVN](). Huomaa, että TortoiseSVN:stä pitää valita asennettavaksi myös komentorivityökalut. Lisäksi tarvitset jokaiselle koneelle tästä Github-säiliöstä löytyvän asiakasohjelman nimeltään WorkshopClient ja muutaman muun työkalun joita ei sen kummemmin tarvitse asentaa - riittää että niistä on kopiot koneella, esim. `C:\Temp\` -kansiossa. Lisäksi koneissa tulee olla internetyhteys. Mikäli palomuuri estää SVN protokollan, aseta myös HTTP-proxy TortoiseSVNn asetuksista.
+## Valmistelut
 
-Pelipajassa syntyvän **Pajapelin** lähdekoodit ja sisällöt ovat Subversion-versionhallintapalvelimella. Koska Github tukee SVN protokollaa, on suositeltavaa käyttää sitä Pelipajassa:
-* Luo uusi Github-tunnus pelipajan käyttöön.
-* Kirjaudu sisään Githubin weppisivuille tällä uudella tunnuksella. 
-* [Forkkaa](https://help.github.com/articles/fork-a-repo) Pajapelin Github-säiliö osoitteesta: [I'm an inline-style link](https://www.google.com)
+### Koneet ja asennettavat ohjelmistot
+Pelipajassa tulee olla riittävästi tietokoneita. Koska osallistujat voivat vuorotella tai tehdä sisältöjä yhdessä saman koneen ääressä, jokaiselle osallistujalle ei tarvitse kuitenkaan olla omaa konetta. Koneisiin on asennettu [Jypeli](https://trac.cc.jyu.fi/projects/npo/wiki/KurssiSoftat), [Paint.NET](http://www.getpaint.net/download.html#download) ja [TortoiseSVN](http://tortoisesvn.net/downloads.html). Huomaa, että TortoiseSVN:stä pitää erikseen valita asennettavaksi myös komentorivi- eli CLI työkalut.
 
+Koneissa tulee olla internetyhteys. Mikäli palomuuri estää SVN protokollan, aseta HTTP-proxy TortoiseSVNn asetuksista.
 
+### Asiakasohjelma ja loput työkalut
 
-TODO: Fork PajaPeli
+Lisäksi tarvitset jokaiselle koneelle tästä Github-säiliöstä löytyvän asiakasohjelman nimeltään WorkshopClient ja muutaman muun työkalun joita ei sen kummemmin tarvitse asentaa - riittää että niistä on kopiot koneella, esim. `C:\Temp\` -kansiossa. ```TODO: Laita linkit milkytrackeriin ja sfxr:ään.```
 
-Valmistelleksasi työpisteen:
-* Kopioi kaikki kansiosta (TODO: tee installeri/binääri ja laita se jonnekin ladattavaksi) kansio C:/Temp/ (tarkista, että kansiossa on ajo-oikeudet).
-* Aja sfxr.exe
+Pelipajassa syntyvän **Pajapelin** lähdekoodit ja sisällöt ovat Subversion-versionhallintapalvelimella. Koska Github tukee myös SVN protokollaa, on suositeltavaa käyttää sitä Pelipajan versionhallitapalvelimena. Toimi siis näin:
+1. Luo uusi Github-tunnus pelipajan käyttöön.
+2. Kirjaudu sisään Githubin weppisivuille tällä uudella tunnuksella. 
+3. [Forkkaa](https://help.github.com/articles/fork-a-repo) Pajapelin Github-säiliö osoitteesta: [I'm an inline-style link](https://www.google.com)
+
+Lopuksi, valmistelleksasi työpisteen:
+1. Kopioi kaikki kansiosta ```TODO: tee installeri/binääri ja laita se jonnekin ladattavaksi``` kansio C:/Temp/ (tarkista, että kansiossa on ajo-oikeudet).
+2. Aja sfxr.exe
  * vie (export) yksi sämple kansioon "PajaPeli/DynamicContent/Tehosteet/". Tämä asettaa oletustallennussijainnin.
  * Poista sämple.wav
-- Aja milkytracker.exe
+3. Aja milkytracker.exe
  * tallenna ([Disk.op.], [*] wav, [Save as], [As..] ) tyhjä biisi kansioon "PajaPeli/DynamicContent/Musiikki/". Tämä asettaa oletustallennussijainnin.
  * Poista biisi.wav
-- Commitoi kerran TortoiseSVN:llä joku pikkumuutos GitHubiin ja ruksi, "tallenna salasana". Käytä tunnusta ja salasanaa, jolla forkkasit PajaPeli -Github säiliön yllä.
-- Käynnistä työpajan asiakasohjelma WorkshopClient.exe
+4. Commitoi kerran TortoiseSVN:llä joku pikkumuutos (esim yksi välilyönti lisää README.md -tiedostoon) GitHubiin ja ruksi, "tallenna salasana". Sisältöjen lisäys peliin ei onnistu jos salasanakysely on päällä. Huom! Käytä sitä Pelipajaa varten luomaasi tunnusta ja salasanaa, jolla forkkasit PajaPeli -Github säiliön yllä.
+5. Käynnistä työpajan asiakasohjelma WorkshopClient.exe
 
-== Kuvaus ==
+== Käyttö ==
 
-Pelipajan osallistuja tekee peliä allakuvatun asiakasohjelman käyttöliittymän kautta. 
+Pelipajan osallistuja tekee peliä allakuvatun asiakasohjelman käyttöliittymän kautta (kuva alla):
 
-* Painamalla "Pelaa uusinta versiota pelistä" osallistuja voi pelata PeliPajassa syntyvää peliä. Pellin alla tapahtuu seuraavaa: asikasohjelma hakee versionhallinnasta (SVN) PajaPelin viimeisimmät lähdekoodi- ja sisältötiedostot, kääntää pelin käyttäen "msbuild.exe"-työkalua ja käynnistää syntyneen pelibinäärin (Pajapeli.exe).
+![käyttöliittymä](https://raw.githubusercontent.com/juherask/PeliPaja/master/pajapeli_ui.png "Kuva Pelipajan käyttöliittymästä")
 
-* Painamalla "Tee uusi pelihahmo peliin" peliin lisätään uusi pelaajahahmo tai vihollinen. Kun nappia on painettu, aukeaa Paint.Net ohjelmassa tyhjä 50x50 kokoinen kuva, jonka vasemman yläkulman pikselin oletusväri määrää että kyseessä on pelaajahahmo. Jos kyiseisen pikselin värin vaihtaa Paint.Netin paletin äärimmäisen oikean yläkulman fuksianpunaiseksi, tulkitaan piirretty hahmo viholliseksi. Käyttämällä mitä tahansa muuta väriä, voi tehdä erikoistuneita vihollisia, mutta tällöin kyseisen värisen pikselin pitää esiintyä jossain kentässä/kartassa tai vihollinen ei ilmaannu (katso "Tee uusi kartta peliin"). Tehtyä hahmoa ei tallenneta nimellä, vaan tallennetaan nimeämättä (CTRL+S), jonka jälkeen Paint.Netin voi sulkea ruksista, jonka jälkeen asiakasohjelma palaa ruudulle. Asiakasohjelma pyytää vielä nimeämään hahmon, jonka jälkeen painamalla "Pelaa uusinta versiota pelistä" voi ihastella omaa tekelettään pelissä. Jos on niin tyytyväinen taiteeseensa, että haluaa laittaa hahmon muidenkin peleihin, tulee painaa "Lisää tekemäsi sisältö peliin". Tästä toiminnosta lisää alempana.
+* Painamalla ```Pelaa uusinta versiota pelistä``` osallistuja voi pelata PeliPajassa syntyvää peliä. Pellin alla tapahtuu seuraavaa: asikasohjelma hakee versionhallinnasta (SVN) PajaPelin viimeisimmät lähdekoodi- ja sisältötiedostot, kääntää pelin käyttäen ```msbuild.exe```-työkalua ja käynnistää syntyneen pelibinäärin (```Pajapeli.exe```).
+
+* Painamalla ```Tee uusi pelihahmo peliin``` peliin lisätään uusi pelaajahahmo tai vihollinen. Kun nappia on painettu, aukeaa Paint.Net ohjelmassa tyhjä 50x50 kokoinen kuva, jonka vasemman yläkulman pikselin oletusväri määrää että kyseessä on pelaajahahmo. Jos kyiseisen pikselin värin vaihtaa Paint.Netin paletin äärimmäisen oikean yläkulman fuksianpunaiseksi, tulkitaan piirretty hahmo viholliseksi. Käyttämällä mitä tahansa muuta väriä, voi tehdä erikoistuneita vihollisia, mutta tällöin kyseisen värisen pikselin pitää esiintyä jossain kentässä/kartassa tai vihollinen ei ilmaannu (katso "Tee uusi kartta peliin" alla). Tehtyä hahmoa ei tallenneta nimellä, vaan tallennetaan nimeämättä (```CTRL```+```S```), jonka jälkeen Paint.Netin voi sulkea ruksista, jonka jälkeen asiakasohjelma palaa ruudulle. Asiakasohjelma pyytää vielä nimeämään hahmon, jonka jälkeen painamalla ```Pelaa uusinta versiota pelistä``` voi ihastella omaa tekelettään pelissä. Jos on niin tyytyväinen taiteeseensa, että haluaa laittaa hahmon muidenkin peleihin, tulee painaa ```Lisää tekemäsi sisältö peliin```. Tästä toiminnosta lisää alempana.
+
+== Konfigurointi ==
+
+TODO: Kirjoita settings.ini:n käyttöohje.
 
 == Kysymyksiä ja Vastauksia ==
 
