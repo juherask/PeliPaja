@@ -451,6 +451,10 @@ public class WorkshopClient : Game
     void ShowDebug()
     {
         showDebug = !showDebug;
+        if (showDebug)
+            MessageDisplay.Add("Näyttää debugviestit.");
+        else
+            MessageDisplay.Add("Piilottaa debugviestit.");
     }
     #endregion
 
